@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rosto Robô</title>
+
+<style>
+:root{
+  --blue:#38b6ff;
+  --blueStrong:#6fd3ff;
+  --bg:#020611;
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  font-family:system-ui;
+}
+
+/* container fixo topo */
+.wrap{
+  width:100%;
+  max-width:420px;
+  height:260px;
+  margin-top:10px;
+  position:relative;
+}
+
+/* faixa visor */
+.visor{
+  position:absolute;
+  top:20px;
+  left:5%;
+  right:5%;
+  height:70px;
+  border-radius:20px;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,.15), transparent 60%),
+    linear-gradient(#06152d,#020611);
+  box-shadow:
+    inset 0 0 30px rgba(0,170,255,.25),
+    0 0 40px rgba(0,150,255,.15);
+  overflow:hidden;
+}
+
+/* linha base */
+.scanline{
+  position:absolute;
+  inset:0;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,.06) 0px,
+      rgba(255,255,255,.06) 2px,
+      transparent 3px,
+      transparent 6px
+    );
+}
+
+/* olhos */
+.eyes{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 14%;
+}
+
+.eye{
+  width:80px;
+  height:28px;
+  border-radius:10px;
+  background:
+    radial-gradient(circle at center,var(--blueStrong),var(--blue));
+  filter:blur(.3px);
+  box-shadow:
+    0 0 18px var(--blue),
+    0 0 40px rgba(0,180,255,.4);
+  animation:blink 5s infinite;
+}
+
+/* piscada */
+@keyframes blink{
+  0%,92%,100%{ transform:scaleY(1);}
+  94%{ transform:scaleY(.1);}
+  96%{ transform:scaleY(1);}
+}
+
+/* boca dots */
+.mouth{
+  position:absolute;
+  bottom:18px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:8px;
+}
+
+.dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--blueStrong);
+  box-shadow:0 0 10px var(--blue);
+  opacity:.4;
+  transform:scale(.8);
+  transition:.08s linear;
+}
+
+/* botão mic */
+button{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  background:transparent;
+  border:none;
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div class="visor">
+    <div class="scanline"></div>
+
+    <div class="eyes">
+      <div class="eye"></div>
+      <div class="eye"></div>
+    </div>
+  </div>
+
+  <div class="mouth" id="mouth"></div>
+
+  <button id="start"></button>
+</div>
+
+<script>
+const mouth=document.getElementById("mouth")
+
+/* cria bolinhas */
+for(let i=0;i<9;i++){
+  let d=document.createElement("div")
+  d.className="dot"
+  mouth.appendChild(d)
+}
+const dots=[...document.querySelectorAll(".dot")]
+
+let ctx, analyser, data
+
+async function start(){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true})
+  ctx=new AudioContext()
+  analyser=ctx.createAnalyser()
+  analyser.fftSize=256
+  data=new Uint8Array(analyser.fftSize)
+
+  ctx.createMediaStreamSource(stream).connect(analyser)
+  loop()
+}
+
+function level(){
+  analyser.getByteTimeDomainData(data)
+  let sum=0
+  for(let i=0;i<data.length;i++){
+    let n=(data[i]-128)/128
+    sum+=n*n
+  }
+  return Math.sqrt(sum/data.length)
+}
+
+function loop(){
+  let v=level()*2.2
+
+  dots.forEach((d,i)=>{
+    let power=Math.max(0, v - (i*0.05))
+    d.style.opacity=Math.min(1,power*3)
+    d.style.transform=`scale(${.7 + power*1.8})`
+  })
+
+  requestAnimationFrame(loop)
+}
+
+document.getElementById("start").onclick=start
+</script>
+</body>
+</html>
