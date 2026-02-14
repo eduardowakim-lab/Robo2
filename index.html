@@ -1,194 +1,464 @@
-<!doctype html> 
+<!doctype html>
 <html lang="pt-br">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Rosto Robô</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Robô (imagem completa) + áudio</title>
+  <style>
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      height:100svh;
+      overflow:hidden;
+      background:#000;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select:none;
+    }
 
-<style>
-:root{
-  --blue:#38b6ff;
-  --blueStrong:#6fd3ff;
-  --bg:#020611;
-}
+    /* Tela cheia */
+    .stage{
+      position:fixed;
+      inset:0;
+      width:100vw;
+      height:100svh;
+      display:block;
+      overflow:hidden;
+      background:#000;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+    }
 
-body{
-  margin:0;
-  background:var(--bg);
-  height:100vh;
-  display:flex;
-  justify-content:center;
-  align-items:flex-start;
-  font-family:system-ui;
-}
+    /* Imagem do robô (corpo inteiro) */
+    .bg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit: cover;        /* preenche tudo */
+      object-position: center;  /* centraliza */
+      transform: translateZ(0);
+      filter: saturate(1.05) contrast(1.03);
+    }
 
-/* container fixo topo */
-.wrap{
-  width:100%;
-  max-width:420px;
-  height:260px;
-  margin-top:10px;
-  position:relative;
-}
+    /* Camada por cima para animações */
+    .overlay{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    }
 
-/* faixa visor */
-.visor{
-  position:absolute;
-  top:20px;
-  left:5%;
-  right:5%;
-  height:70px;
-  border-radius:20px;
-  background:
-    radial-gradient(circle at center, rgba(255,255,255,.15), transparent 60%),
-    linear-gradient(#06152d,#020611);
-  box-shadow:
-    inset 0 0 30px rgba(0,170,255,.25),
-    0 0 40px rgba(0,150,255,.15);
-  overflow:hidden;
-}
+    /* Barra de “volume” (discreta) */
+    .meter{
+      position:absolute;
+      left: 12px;
+      right: 12px;
+      top: 12px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(8px);
+    }
+    .meter > div{
+      height:100%;
+      width:0%;
+      background: rgba(120,220,255,.92);
+    }
 
-/* linha base */
-.scanline{
-  position:absolute;
-  inset:0;
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      rgba(255,255,255,.06) 0px,
-      rgba(255,255,255,.06) 2px,
-      transparent 3px,
-      transparent 6px
-    );
-}
+    /* === OLHOS (pupilas por cima da imagem) ===
+       Ajuste fino fácil via --eyeY e --eyeGap */
+    :root{
+      --eyeY: 21.5%;      /* altura dos olhos */
+      --eyeGap: 17.8%;    /* distância entre olhos */
+      --pupilSize: 3.2vw; /* tamanho pupila (responsive) */
+      --pupilMin: 16px;
+      --pupilMax: 28px;
+    }
 
-/* olhos */
-.eyes{
-  position:absolute;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 14%;
-}
+    .pupil{
+      position:absolute;
+      top: var(--eyeY);
+      width: clamp(var(--pupilMin), var(--pupilSize), var(--pupilMax));
+      height: clamp(var(--pupilMin), var(--pupilSize), var(--pupilMax));
+      border-radius: 999px;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      background: radial-gradient(circle at 35% 35%, rgba(30,30,30,.95) 0 45%, rgba(0,0,0,.98) 70% 100%);
+      box-shadow:
+        0 0 14px rgba(0,0,0,.35),
+        0 0 26px rgba(80,190,255,.10);
+      opacity:.92;
+      mix-blend-mode: multiply;
+    }
+    .pupil.left{ margin-left: calc(-1 * var(--eyeGap)); }
+    .pupil.right{ margin-left: var(--eyeGap); }
 
-.eye{
-  width:80px;
-  height:28px;
-  border-radius:10px;
-  background:
-    radial-gradient(circle at center,var(--blueStrong),var(--blue));
-  filter:blur(.3px);
-  box-shadow:
-    0 0 18px var(--blue),
-    0 0 40px rgba(0,180,255,.4);
-  animation:blink 5s infinite;
-}
+    /* Piscar (uma pálpebra por cima da área do olho) */
+    .lid{
+      position:absolute;
+      left:50%;
+      top: calc(var(--eyeY) - 3.8%);
+      width: 18%;
+      height: 14%;
+      transform: translate(-50%,-50%);
+      border-radius: 999px;
+      background: linear-gradient(rgba(10,20,30,.85), rgba(10,20,30,0));
+      opacity:0;
+      filter: blur(0.2px);
+      animation: blink 4.6s infinite;
+      mix-blend-mode: multiply;
+    }
+    .lid.left{ margin-left: calc(-1 * var(--eyeGap)); animation-delay: .10s; }
+    .lid.right{ margin-left: var(--eyeGap); animation-delay: .28s; }
 
-/* piscada */
-@keyframes blink{
-  0%,92%,100%{ transform:scaleY(1);}
-  94%{ transform:scaleY(.1);}
-  96%{ transform:scaleY(1);}
-}
+    @keyframes blink{
+      0%, 92%, 100% { opacity:0; transform: translate(-50%,-50%) scaleY(0.15); }
+      94% { opacity:1; transform: translate(-50%,-50%) scaleY(1.05); }
+      96% { opacity:0; transform: translate(-50%,-50%) scaleY(0.15); }
+    }
 
-/* boca dots */
-.mouth{
-  position:absolute;
-  bottom:18px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:8px;
-}
+    /* === BOCA (sobrepor na boca da imagem) ===
+       Ajuste fino via --mouthY e --mouthW */
+    :root{
+      --mouthY: 29.8%;
+      --mouthW: 22%;
+      --mouthH: 10%;
+    }
 
-.dot{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background:var(--blueStrong);
-  box-shadow:0 0 10px var(--blue);
-  opacity:.4;
-  transform:scale(.8);
-  transition:.08s linear;
-}
+    .mouth{
+      position:absolute;
+      left:50%;
+      top: var(--mouthY);
+      width: var(--mouthW);
+      height: var(--mouthH);
+      transform: translate(-50%,-50%);
+      transform-origin: center;
+      border-radius: 0 0 999px 999px;
+      background: rgba(0,0,0,.55);
+      box-shadow:
+        0 14px 24px rgba(0,0,0,.35),
+        inset 0 10px 18px rgba(255,255,255,.06);
+      border: 2px solid rgba(255,255,255,.07);
+      overflow:hidden;
+      opacity:.0; /* começa invisível; aparece ao falar */
+      pointer-events:none;
+      mix-blend-mode: multiply;
+    }
 
-/* botão mic */
-button{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  background:transparent;
-  border:none;
-}
-</style>
+    .tongue{
+      position:absolute;
+      left:50%;
+      bottom:-18%;
+      width: 64%;
+      height: 88%;
+      transform: translateX(-50%) scale(0.85);
+      border-radius: 999px 999px 70% 70%;
+      background: radial-gradient(circle at 50% 35%, #ff9a9a 0 18%, #ff3b3b 55%, #c71818 100%);
+      box-shadow: inset 0 -10px 18px rgba(0,0,0,.25);
+      opacity:0;
+    }
+
+    /* Botão mic */
+    .micBtn{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      pointer-events:auto;
+    }
+    .micBtn button{
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:16px 18px;
+      border-radius:18px;
+      font-weight:850;
+      font-size:18px;
+      color:#07121c;
+      background: linear-gradient(135deg, #39c6ff, #2a8bff);
+      box-shadow: 0 18px 36px rgba(0,0,0,.35), inset 0 0 0 2px rgba(255,255,255,.25);
+      max-width:min(360px, 86vw);
+      transition: transform .12s ease, filter .12s ease, opacity .12s ease;
+    }
+    .micBtn button:active{ transform: scale(.98); filter: brightness(1.03); }
+    .micBtn button:disabled{ cursor:default; opacity:.88; }
+    .micIcon{
+      width:38px; height:38px; border-radius:12px;
+      background: rgba(255,255,255,.25);
+      display:grid; place-items:center;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.22);
+      flex:0 0 auto;
+    }
+    .micIcon svg{ width:22px; height:22px; }
+    .btnText{ display:flex; flex-direction:column; line-height:1.05; text-align:left; }
+    .btnTitle{ font-size:18px; }
+    .sub{ font-size:13px; font-weight:650; opacity:.95; margin-top:6px; }
+
+    .hint{
+      position:absolute;
+      left:0; right:0; bottom: 10px;
+      display:grid;
+      place-items:center;
+      padding: 12px 16px;
+      pointer-events:none;
+    }
+    .pill{
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      padding: 10px 14px;
+      backdrop-filter: blur(8px);
+      font-size: 13px;
+      line-height: 1.2;
+      color:#d9f1ff;
+      opacity:.98;
+      text-align:center;
+    }
+    .pill strong{ color:#fff; font-weight:850; }
+
+    @media (prefers-reduced-motion: reduce){
+      .lid{ animation:none; }
+      .micBtn button{ transition:none; }
+    }
+  </style>
 </head>
 
 <body>
-<div class="wrap">
+  <div class="stage">
+    <!-- ✅ Coloque a imagem completa do robô na mesma pasta e renomeie para robo.png -->
+    <img class="bg" src="robo.png" alt="Robô" />
 
-  <div class="visor">
-    <div class="scanline"></div>
+    <div class="overlay">
+      <div class="meter"><div id="bar"></div></div>
 
-    <div class="eyes">
-      <div class="eye"></div>
-      <div class="eye"></div>
+      <!-- Pupilas + piscar -->
+      <div class="pupil left"  id="pL"></div>
+      <div class="pupil right" id="pR"></div>
+      <div class="lid left"></div>
+      <div class="lid right"></div>
+
+      <!-- Boca -->
+      <div class="mouth" id="mouth">
+        <div class="tongue" id="tongue"></div>
+      </div>
+
+      <!-- Botão -->
+      <div class="micBtn" id="micBtn">
+        <button id="startBtn" type="button" aria-label="Ligar microfone">
+          <span class="micIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" stroke="rgba(7,18,28,.95)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M19 11a7 7 0 0 1-14 0" stroke="rgba(7,18,28,.95)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 18v3" stroke="rgba(7,18,28,.95)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M9 21h6" stroke="rgba(7,18,28,.95)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="btnText">
+            <span class="btnTitle" id="btnTitle">Ligar microfone</span>
+            <span class="sub" id="btnSub">Toque e deixe o robô “falar” 😊</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="hint" id="hint">
+        <div class="pill" id="pillText">
+          <strong>Dica:</strong> se der “negado”, abra o cadeado do navegador e permita o microfone.
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="mouth" id="mouth"></div>
-
-  <button id="start"></button>
-</div>
-
 <script>
-const mouth=document.getElementById("mouth")
+(() => {
+  let audioCtx, analyser, data, stream;
+  let running = false;
 
-/* cria bolinhas */
-for(let i=0;i<9;i++){
-  let d=document.createElement("div")
-  d.className="dot"
-  mouth.appendChild(d)
-}
-const dots=[...document.querySelectorAll(".dot")]
+  const bar = document.getElementById("bar");
+  const mouth = document.getElementById("mouth");
+  const tongue = document.getElementById("tongue");
 
-let ctx, analyser, data
+  const pL = document.getElementById("pL");
+  const pR = document.getElementById("pR");
 
-async function start(){
-  const stream=await navigator.mediaDevices.getUserMedia({audio:true})
-  ctx=new AudioContext()
-  analyser=ctx.createAnalyser()
-  analyser.fftSize=256
-  data=new Uint8Array(analyser.fftSize)
+  const micBtn = document.getElementById("micBtn");
+  const startBtn = document.getElementById("startBtn");
+  const btnTitle = document.getElementById("btnTitle");
+  const btnSub = document.getElementById("btnSub");
+  const hint = document.getElementById("hint");
+  const pillText = document.getElementById("pillText");
 
-  ctx.createMediaStreamSource(stream).connect(analyser)
-  loop()
-}
+  // Sensibilidade / animação
+  const SENS = 2.05;
+  const SMOOTH = 0.22;
 
-function level(){
-  analyser.getByteTimeDomainData(data)
-  let sum=0
-  for(let i=0;i<data.length;i++){
-    let n=(data[i]-128)/128
-    sum+=n*n
+  // Boca
+  const OPEN_MIN = 0.85;
+  const OPEN_MAX = 1.85;
+
+  // Silêncio => olhos “desconfiados”
+  const SILENCE_TH = 0.020; // ajuste se precisar (0.015 a 0.03)
+  let smoothLevel = 0;
+  let idleT = 0;
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+  function computeRms(bytes){
+    let sum = 0;
+    for (let i=0;i<bytes.length;i++){
+      const n = (bytes[i] - 128) / 128;
+      sum += n*n;
+    }
+    return Math.sqrt(sum / bytes.length);
   }
-  return Math.sqrt(sum/data.length)
-}
 
-function loop(){
-  let v=level()*2.2
+  function stopStream(){
+    try{
+      if (stream){
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+      if (audioCtx){
+        audioCtx.close();
+        audioCtx = null;
+      }
+    }catch(_){}
+  }
 
-  dots.forEach((d,i)=>{
-    let power=Math.max(0, v - (i*0.05))
-    d.style.opacity=Math.min(1,power*3)
-    d.style.transform=`scale(${.7 + power*1.8})`
-  })
+  function setButtonState(state){
+    if (state === "idle"){
+      startBtn.disabled = false;
+      btnTitle.textContent = "Ligar microfone";
+      btnSub.textContent = "Toque e deixe o robô “falar” 😊";
+    } else if (state === "loading"){
+      startBtn.disabled = true;
+      btnTitle.textContent = "Aguarde…";
+      btnSub.textContent = "Abrindo permissão do microfone…";
+    } else if (state === "ok"){
+      startBtn.disabled = true;
+      btnTitle.textContent = "Microfone ligado ✅";
+      btnSub.textContent = "Pronto! Pode falar 🙂";
+    }
+  }
 
-  requestAnimationFrame(loop)
-}
+  async function startMic(){
+    if (running) return;
 
-document.getElementById("start").onclick=start
+    running = true;
+    setButtonState("loading");
+
+    try{
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        throw new Error("getUserMedia não disponível neste navegador.");
+      }
+
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+      if (audioCtx.state === "suspended") {
+        try { await audioCtx.resume(); } catch(_) {}
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true
+        }
+      });
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      data = new Uint8Array(analyser.fftSize);
+      source.connect(analyser);
+
+      setButtonState("ok");
+      hint.style.display = "none";
+      setTimeout(() => { micBtn.style.display = "none"; }, 800);
+
+      loop();
+    } catch (e){
+      running = false;
+      stopStream();
+      setButtonState("idle");
+
+      hint.style.display = "grid";
+      pillText.innerHTML =
+        "<strong>Ops!</strong> Não consegui acessar o microfone.<br/>" +
+        "Abra o cadeado do site → Permissões → Microfone → <strong>Permitir</strong>.";
+      console.error(e);
+    }
+  }
+
+  function animateEyes(level){
+    // no silêncio, pupilas passeiam e dão “desconfiança”
+    if (level < SILENCE_TH){
+      idleT += 0.045;
+
+      // movimentos suaves
+      const x = Math.sin(idleT) * 7;           // px
+      const y = Math.cos(idleT * 0.7) * 4.5;   // px
+
+      pL.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+      pR.style.transform = `translate(calc(-50% - ${x*0.7}px), calc(-50% + ${y*0.6}px))`;
+
+      // boca some no silêncio
+      mouth.style.opacity = "0";
+      tongue.style.opacity = "0";
+    } else {
+      // ao falar, centraliza
+      idleT = 0;
+      pL.style.transform = "translate(-50%,-50%)";
+      pR.style.transform = "translate(-50%,-50%)";
+    }
+  }
+
+  function loop(){
+    if (!running) return;
+
+    analyser.getByteTimeDomainData(data);
+
+    let level = computeRms(data) * SENS;
+    smoothLevel = smoothLevel + (level - smoothLevel) * (1 - SMOOTH);
+    level = smoothLevel;
+
+    // barra
+    const pct = clamp(level * 120, 0, 100);
+    bar.style.width = pct + "%";
+
+    // olhos
+    animateEyes(level);
+
+    // boca (aparece ao falar)
+    if (level >= SILENCE_TH){
+      const open = clamp(OPEN_MIN + level * (OPEN_MAX - OPEN_MIN), OPEN_MIN, OPEN_MAX);
+      const opacity = clamp((level - SILENCE_TH) * 18, 0, 1); // começa discreto e sobe
+      mouth.style.opacity = opacity.toFixed(2);
+
+      // “abre” e cresce
+      mouth.style.transform = `translate(-50%,-50%) scaleY(${open})`;
+
+      // língua
+      const tOpacity = clamp(level * 2.2, 0, 1);
+      const tScale = clamp(0.82 + level * 0.95, 0.82, 1.65);
+      tongue.style.opacity = tOpacity.toFixed(2);
+      tongue.style.transform = `translateX(-50%) scale(${tScale})`;
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener("click", startMic);
+})();
 </script>
 </body>
 </html>
